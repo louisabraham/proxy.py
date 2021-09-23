@@ -18,29 +18,41 @@ from ..http.proxy import HttpProxyBasePlugin
 
 
 flags.add_argument(
-    '--filtered-client-ips',
+    "--filtered-client-ips",
     type=str,
-    default='127.0.0.1,::1',
-    help='Default: 127.0.0.1,::1.  Comma separated list of IPv4 and IPv6 addresses.'
+    default="127.0.0.1,::1",
+    help="Default: 127.0.0.1,::1.  Comma separated list of IPv4 and IPv6 addresses.",
+)
+
+flags.add_argument(
+    "--allowed-client-ips",
+    type=str,
+    default="",
+    help="Default: allows everybody.  Comma separated list of IPv4 and IPv6 addresses.",
 )
 
 
 class FilterByClientIpPlugin(HttpProxyBasePlugin):
     """Drop traffic by inspecting incoming client IP address."""
 
-    def before_upstream_connection(
-            self, request: HttpParser) -> Optional[HttpParser]:
-        if self.client.addr[0] in self.flags.filtered_client_ips.split(','):
+    def before_upstream_connection(self, request: HttpParser) -> Optional[HttpParser]:
+        addr = self.client.addr[0]
+        reject = addr in self.flags.filtered_client_ips.split(",")
+        allowed_ips = self.flags.allowed_client_ips
+        if allowed_ips and addr not in allowed_ips.split(","):
+            reject = True
+
+        if reject:
             raise HttpRequestRejected(
-                status_code=httpStatusCodes.I_AM_A_TEAPOT, reason=b'I\'m a tea pot',
+                status_code=httpStatusCodes.I_AM_A_TEAPOT,
+                reason=b"I'm a tea pot",
                 headers={
-                    b'Connection': b'close',
-                }
+                    b"Connection": b"close",
+                },
             )
         return request
 
-    def handle_client_request(
-            self, request: HttpParser) -> Optional[HttpParser]:
+    def handle_client_request(self, request: HttpParser) -> Optional[HttpParser]:
         return request
 
     def handle_upstream_chunk(self, chunk: memoryview) -> memoryview:
